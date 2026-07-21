@@ -96,7 +96,7 @@ public final class IngestClient {
     }
 
     /** POST /link/init {mcUid, server} -- unauthenticated; mints a short-lived link code the
-     *  human then completes via the website's Discord OAuth flow (PROTOCOL.md SS6.2). */
+     *  human then completes via the website's Discord OAuth flow (PROTOCOL.md SS6.1). */
     public String initLink(String server, UUID mcUid) throws Exception {
         Map<String, Object> body = Map.of("mcUid", mcUid.toString(), "server", server);
         HttpRequest req = base("/link/init")

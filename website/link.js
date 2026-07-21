@@ -1,4 +1,4 @@
-/* Aquarius Road Department -- account linking (Tier B, PROTOCOL.md SS6.2) AND
+/* Aquarius Road Department -- account linking (Tier B, PROTOCOL.md SS6.1) AND
  * the admin dashboard's Discord login, sharing this one page because it's the
  * single redirect URI actually registered with Discord's OAuth app.
  *

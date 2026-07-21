@@ -4,7 +4,7 @@ import sys
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "server"))
+sys.path.insert(0, str(ROOT / "protocol"))
 
 import geometry  # noqa: E402
 from geometry import load_network, map_hash, rederive, nearest_allowed  # noqa: E402

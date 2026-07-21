@@ -89,7 +89,7 @@ public final class HighwayConditionsCommand {
         return 1;
     }
 
-    /** Requests a device-code-style link code (PROTOCOL.md SS6.2) and posts it to chat with a
+    /** Requests a device-code-style link code (PROTOCOL.md SS6.1) and posts it to chat with a
      *  clickable link that pre-fills the code on the website -- confirmed against link.js's own
      *  {@code ?linkCode=} query-param handling, a genuine one-click flow rather than a bare URL
      *  the player has to retype an 8-character code into. There's no server-side callback that

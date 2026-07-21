@@ -9,7 +9,7 @@ positions are never reported (see [PROTOCOL.md](../PROTOCOL.md)).
 Each bot tick it reads the bot's own position from `Globals.CACHE` and, only when the bot is
 **in the nether, on a highway (within tolerance), at y120**, enqueues a `(road, seg, along, cond)`
 report and batches it to the ingest service. The gate order mirrors the reference client
-(`server/reference_client.py`); the perpendicular offset is confined to `Geo.nearestAllowed`
+(`protocol/reference_client.py`); the perpendicular offset is confined to `Geo.nearestAllowed`
 and never becomes part of a report. Geometry (the road table + `map` hash) is fetched from the
 ingest service, so client and server share one source of truth.
 

@@ -31,7 +31,7 @@ import static com.github.rfresh2.EventConsumer.of;
 /**
  * Polls the bot's own state each tick and, when on a highway, enqueues a 1-D condition report.
  *
- * <p>The gate order mirrors {@code server/reference_client.py}: nether dimension → radius cap
+ * <p>The gate order mirrors {@code protocol/reference_client.py}: nether dimension → radius cap
  * → on-road within tolerance → strict y120. The perpendicular offset is confined to
  * {@link Geo#nearestAllowed} and never becomes part of a report. Off-road ⇒ nothing is built.
  *

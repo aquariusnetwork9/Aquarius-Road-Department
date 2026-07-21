@@ -50,7 +50,7 @@ MC-version ports — a bare `v0.1.0` alone wouldn't distinguish which MC target 
   detector (`module/ObstructionWatcher.java`, ported verbatim — pure math, no game-API
   dependency). Off by default (opt-in), toggled via `/ard reporting on|off`.
 - **Account linking** — `/ard link` requests a device-code-style link code
-  (PROTOCOL.md §6.2) using your already-authenticated Minecraft session UUID, and posts it to
+  (PROTOCOL.md §6.1) using your already-authenticated Minecraft session UUID, and posts it to
   chat with a one-click link to the website's Discord-login flow. Once you finish there, copy
   the shown token and run `/ard token <value>` to actually start reporting as Tier B.
 

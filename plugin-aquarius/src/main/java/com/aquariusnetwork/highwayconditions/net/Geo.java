@@ -8,7 +8,7 @@ import java.util.List;
  * <p>Fetching (rather than bundling) the road table makes the client and server share ONE
  * source of truth: the {@link #map} hash the server expects and the exact roads it will
  * re-derive against. The snapping / quantization here mirrors the reference implementation
- * ({@code server/geometry.py}) 1:1 so a report's {@code (road, seg, along)} means the same
+ * ({@code protocol/geometry.py}) 1:1 so a report's {@code (road, seg, along)} means the same
  * thing on both ends. No {@code (x, z)} ever leaves this object in a report.
  */
 public final class Geo {

@@ -1,6 +1,6 @@
 name: plugin-aquarius Build
 
-# Scoped to this subdirectory only -- this is a monorepo (server/website/discord-bot/etc.
+# Scoped to this subdirectory only -- this is a monorepo (protocol/website/discord-bot/etc.
 # live alongside this Gradle project) and unrelated changes shouldn't trigger a Java build.
 on:
   pull_request:
