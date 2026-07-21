@@ -9,8 +9,8 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
-import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
+import net.fabricmc.fabric.api.client.rendering.v1.HudLayerRegistrationCallback;
+import net.fabricmc.fabric.api.client.rendering.v1.IdentifiedLayer;
 import net.minecraft.util.Identifier;
 
 import org.slf4j.Logger;
@@ -55,12 +55,14 @@ public final class HighwayConditionsFabricClient implements ClientModInitializer
             hud.tick(client);
         });
 
-        // MC 1.21.8's HUD registration API: HudElementRegistry (introduced at 1.21.6, replacing
-        // the 1.21.5-era HudLayerRegistrationCallback/LayeredDrawerWrapper this mod used before
-        // this hop). Attached just before vanilla chat so it inherits chat's own
-        // render-visibility condition (e.g. a hidden HUD).
-        HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT,
-            Identifier.of("ard", "hazard_ahead"), hud::render);
+        // MC 1.21.5's HUD registration API: HudLayerRegistrationCallback/LayeredDrawerWrapper
+        // (HudRenderCallback still exists here but is already deprecated in favor of this; the
+        // NEXT rename, to HudElementRegistry/HudElement, doesn't land until MC 1.21.6 -- expect
+        // to swap this again on the 1.21.8 hop). Attached just before vanilla chat so it
+        // inherits chat's own render-visibility condition (e.g. a hidden HUD).
+        HudLayerRegistrationCallback.EVENT.register(layeredDrawer ->
+            layeredDrawer.attachLayerBefore(IdentifiedLayer.CHAT,
+                Identifier.of("ard", "hazard_ahead"), hud::render));
 
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
             command.register(dispatcher));
