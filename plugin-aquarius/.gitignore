@@ -1,0 +1,8 @@
+# Gradle
+.gradle/
+build/
+run/
+
+# The AquariusProxy API jar is huge and not ours to redistribute — supply it locally
+# or via -Paquarius_jar=... (CI downloads it from the AquariusProxy releases).
+libs/*.jar

@@ -1,0 +1,8 @@
+# Gradle
+.gradle/
+build/
+run/
+
+# The ZenithProxy API jar is huge and not ours to redistribute — supply it locally
+# or via -Pzenith_jar=... (CI downloads it from the ZenithProxy releases).
+libs/*.jar

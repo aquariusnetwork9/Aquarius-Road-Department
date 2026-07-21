@@ -1,0 +1,60 @@
+name: client-fabric Build
+
+# Scoped to this subdirectory only -- this is a monorepo (server/website/discord-bot/etc.
+# live alongside this Gradle project) and unrelated changes shouldn't trigger a Java build.
+on:
+  pull_request:
+    paths:
+      - "client-fabric/**"
+      - ".github/workflows/client-fabric-build.yml"
+  push:
+    branches:
+      - "*"
+    paths:
+      - "client-fabric/**"
+      - ".github/workflows/client-fabric-build.yml"
+
+defaults:
+  run:
+    working-directory: client-fabric
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # contents: write (not just read) because dependency-graph: generate-and-submit below needs
+    # it to actually submit. Safe on pull_request: GitHub forces the token read-only for fork
+    # PRs regardless of what's declared here -- this only takes effect for same-repo push/PR.
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      # Unlike plugin-aquarius/plugin-zenith, there's no proprietary API jar to fetch here --
+      # Loom pulls Minecraft/Yarn/Fabric Loader/Fabric API straight from public Fabric/Mojang
+      # Maven repos declared in build.gradle.kts.
+      - name: Setup JDK
+        uses: actions/setup-java@v5
+        with:
+          java-version: "21"
+          distribution: "temurin"
+
+      - name: Elevate wrapper permissions
+        run: chmod +x ./gradlew
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          dependency-graph: generate-and-submit
+
+      - name: Build Mod
+        run: ./gradlew build
+
+      - name: Upload Mod Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: client-fabric
+          path: client-fabric/build/libs/*.jar
+          if-no-files-found: error

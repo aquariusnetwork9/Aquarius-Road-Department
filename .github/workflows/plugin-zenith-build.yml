@@ -1,0 +1,70 @@
+name: plugin-zenith Build
+
+on:
+  pull_request:
+    paths:
+      - "plugin-aquarius/src/main/**"
+      - "plugin-zenith/**"
+      - ".github/workflows/plugin-zenith-build.yml"
+  push:
+    branches:
+      - "*"
+    paths:
+      - "plugin-aquarius/src/main/**"
+      - "plugin-zenith/**"
+      - ".github/workflows/plugin-zenith-build.yml"
+
+defaults:
+  run:
+    working-directory: plugin-zenith
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup JDK
+        uses: actions/setup-java@v5
+        with:
+          java-version: "25"
+          distribution: "temurin"
+
+      - name: Download ZenithProxy API jar
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p libs
+          MC=$(grep '^mc=' gradle.properties | cut -d'=' -f2)
+          # Pin to the newest stable +java.<mc> channel so the API we compile against matches
+          # the MC version this plugin targets -- not whatever release happens to be "latest".
+          TAG=$(gh release list --repo rfresh2/ZenithProxy --limit 100 --json tagName -q '.[].tagName' \
+                | grep -E "\+java\.${MC}\$" | head -1)
+          if [ -z "$TAG" ]; then
+            echo "No +java.${MC} ZenithProxy release found" >&2; exit 1
+          fi
+          echo "Compiling against ZenithProxy $TAG"
+          gh release download "$TAG" --repo rfresh2/ZenithProxy --pattern 'ZenithProxy.jar' --dir libs --clobber
+
+      - name: Elevate wrapper permissions
+        run: chmod +x ./gradlew
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          dependency-graph: generate-and-submit
+
+      - name: Build Plugin
+        run: ./gradlew build
+
+      - name: Upload Plugin Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: plugin-zenith
+          path: plugin-zenith/build/libs/*.jar
+          if-no-files-found: error

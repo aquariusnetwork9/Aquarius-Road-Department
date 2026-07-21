@@ -1,0 +1,73 @@
+name: plugin-aquarius Build
+
+# Scoped to this subdirectory only -- this is a monorepo (server/website/discord-bot/etc.
+# live alongside this Gradle project) and unrelated changes shouldn't trigger a Java build.
+on:
+  pull_request:
+    paths:
+      - "plugin-aquarius/**"
+      - ".github/workflows/plugin-aquarius-build.yml"
+  push:
+    branches:
+      - "*"
+    paths:
+      - "plugin-aquarius/**"
+      - ".github/workflows/plugin-aquarius-build.yml"
+
+defaults:
+  run:
+    working-directory: plugin-aquarius
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # contents: write (not just read) because dependency-graph: generate-and-submit below needs
+    # it to actually submit. Safe on pull_request: GitHub forces the token read-only for fork
+    # PRs regardless of what's declared here -- this only takes effect for same-repo push/PR.
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup JDK
+        uses: actions/setup-java@v5
+        with:
+          java-version: "25"
+          distribution: "temurin"
+
+      - name: Download AquariusProxy API jar
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p libs
+          MC=$(grep '^mc=' gradle.properties | cut -d'=' -f2)
+          # Pin to the newest stable +java.<mc> channel so the API we compile against matches
+          # the MC version this plugin targets -- not whatever release happens to be "latest".
+          TAG=$(gh release list --repo aquariusnetwork9/AquariusProxy --limit 100 --json tagName -q '.[].tagName' \
+                | grep -E "\+java\.${MC}\$" | head -1)
+          if [ -z "$TAG" ]; then
+            echo "No +java.${MC} AquariusProxy release found" >&2; exit 1
+          fi
+          echo "Compiling against AquariusProxy $TAG"
+          gh release download "$TAG" --repo aquariusnetwork9/AquariusProxy --pattern 'AquariusProxy.jar' --dir libs --clobber
+
+      - name: Elevate wrapper permissions
+        run: chmod +x ./gradlew
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          dependency-graph: generate-and-submit
+
+      - name: Build Plugin
+        run: ./gradlew build
+
+      - name: Upload Plugin Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: plugin-aquarius
+          path: plugin-aquarius/build/libs/*.jar
+          if-no-files-found: error

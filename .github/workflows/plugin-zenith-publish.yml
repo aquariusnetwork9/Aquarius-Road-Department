@@ -1,0 +1,73 @@
+name: plugin-zenith Publish
+
+# STANDING ORDER: GitHub Actions is the ONLY thing allowed to build a released jar for this
+# project -- never hand-upload a locally-built artifact. Local builds are for VPS/client test
+# staging only (see plugin-zenith/README.md "Status").
+on:
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: plugin-zenith
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup JDK
+        uses: actions/setup-java@v5
+        with:
+          java-version: "25"
+          distribution: "temurin"
+
+      - name: Download ZenithProxy API jar
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p libs
+          MC=$(grep '^mc=' gradle.properties | cut -d'=' -f2)
+          TAG=$(gh release list --repo rfresh2/ZenithProxy --limit 100 --json tagName -q '.[].tagName' \
+                | grep -E "\+java\.${MC}\$" | head -1)
+          if [ -z "$TAG" ]; then
+            echo "No +java.${MC} ZenithProxy release found" >&2; exit 1
+          fi
+          echo "Compiling against ZenithProxy $TAG"
+          gh release download "$TAG" --repo rfresh2/ZenithProxy --pattern 'ZenithProxy.jar' --dir libs --clobber
+
+      - name: Elevate wrapper permissions
+        run: chmod +x ./gradlew
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          dependency-graph: generate-and-submit
+
+      - name: Build Plugin
+        run: ./gradlew build
+
+      - name: Upload Plugin Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: plugin-zenith
+          path: plugin-zenith/build/libs/*.jar
+          if-no-files-found: error
+
+      - name: Get Plugin Version
+        run: echo "PLUGIN_VERSION=$(grep '^plugin_version=' gradle.properties | cut -d'=' -f2)" >> $GITHUB_ENV
+
+      # Tag is namespaced (plugin-zenith-v...) since this is a monorepo shared with the server,
+      # website, discord-bot, and plugin-aquarius -- each component's releases must not collide
+      # in the same tag/version space.
+      - name: Publish Plugin Github Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: plugin-zenith-v${{ env.PLUGIN_VERSION }}
+          artifacts: plugin-zenith/build/libs/*.jar
+          generateReleaseNotes: true
