@@ -611,6 +611,63 @@ class Store:
             self.db.commit()
             return cur.rowcount > 0
 
+    def quash(self, server, road_idx, seg, along, cond):
+        """Moderator override: removes one specific condition (and its corroborating
+        sources) outright, regardless of its current published/confidence state.
+        Returns True if a row existed and was removed. Logs an 'approved' moderation
+        record (kind='quash') for the same audit trail 'reopen' already gets."""
+        net = self.networks.get(server)
+        if net is None:
+            raise KeyError(server)
+        if not (0 <= road_idx < len(net["roads"])):
+            raise ValueError("road out of range")
+        canon = net["_canon"][road_idx]
+        now = self.clock()
+        with self._lock:
+            row = self.db.execute(
+                "SELECT id FROM conditions WHERE server=? AND road_canon=? AND seg=? AND along=? AND cond=?",
+                (server, canon, seg, along, cond)).fetchone()
+            if row is None:
+                return False
+            cond_id = row[0]
+            self.db.execute("DELETE FROM sources WHERE cond_id=?", (cond_id,))
+            self.db.execute("DELETE FROM conditions WHERE id=?", (cond_id,))
+            self.db.execute(
+                "INSERT INTO moderation(server,kind,payload,observed_y,status,created) VALUES(?,?,?,?,?,?)",
+                (server, "quash",
+                 json.dumps({"road": road_idx, "seg": seg, "along": along, "cond": cond},
+                            separators=(",", ":")),
+                 None, "approved", now))
+            self.db.commit()
+        return True
+
+    def retract_identity(self, server, source_key, now=None):
+        """Removes every currently-active `sources` row this source_key would
+        correspond to on `server`, across every non-expired condition -- used when
+        an identity is suspended, so its past corroborations stop counting
+        immediately rather than lingering until TTL. The per-condition source hash
+        can't be looked up directly (same reason _reported_a_hazard_here recomputes
+        live instead of storing a cross-linkable value), so this recomputes the
+        candidate hash for each active condition and deletes matching rows -- the
+        raw source_key is used only for this one live call, never persisted.
+        Returns the number of sources rows removed."""
+        net = self.networks.get(server)
+        if net is None:
+            return 0
+        now = self.clock() if now is None else now
+        removed = 0
+        with self._lock:
+            rows = self.db.execute(
+                "SELECT id, road_canon, seg, along, cond FROM conditions WHERE server=? AND last_seen>=?",
+                (server, now - self.ttl)).fetchall()
+            for cond_id, canon, seg, along, cond in rows:
+                candidate = self._source_hash(server, canon, seg, along, cond, source_key)
+                cur = self.db.execute(
+                    "DELETE FROM sources WHERE cond_id=? AND src_hash=?", (cond_id, candidate))
+                removed += cur.rowcount
+            self.db.commit()
+        return removed
+
     # ---- SSE ----
     def subscribe(self, server):
         q = queue.Queue(maxsize=256)
@@ -914,6 +971,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._report()
         if path == "/moderation":
             return self._moderation_submit()
+        if path == "/moderation/quash":
+            return self._moderation_quash()
         m = _MOD_RESOLVE_RE.match(path)
         if m:
             return self._moderation_resolve(int(m.group(1)), m.group(2))
@@ -1174,6 +1233,26 @@ class Handler(BaseHTTPRequestHandler):
         ok = self.app.store.resolve_moderation(mid, "approved" if action == "approve" else "rejected")
         self._json(200 if ok else 404, {"resolved": ok})
 
+    def _moderation_quash(self):
+        try:
+            raw = self._read_body()
+            body = json.loads(raw) if raw else {}
+        except (ValueError, json.JSONDecodeError):
+            return self._json(400, {"error": "bad json"})
+        server = body.get("server")
+        if server not in self.app.store.networks:
+            return self._json(400, {"error": "unknown server"})
+        if not self._require_moderator_for(server):
+            return
+        road, seg, along, cond = body.get("road"), body.get("seg"), body.get("along"), body.get("cond")
+        if not (_is_int(road) and _is_int(seg) and _is_int(along) and isinstance(cond, str)):
+            return self._json(400, {"error": "road/seg/along must be integers, cond a string"})
+        try:
+            ok = self.app.store.quash(server, road, seg, along, cond)
+        except (KeyError, ValueError) as e:
+            return self._json(400, {"error": str(e)})
+        self._json(200 if ok else 404, {"quashed": ok})
+
     # ---- registry: Owner (all servers) or a per-server dashboard admin ----
     def _registry_issue(self):
         try:
@@ -1325,7 +1404,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(503, {"error": "account linking not configured"})
         if action == "suspend":
             ok = self.app.auth.links.suspend(discord_id, server)
-            self._json(200 if ok else 404, {"suspended": ok})
+            retracted = self.app.store.retract_identity(server, discord_id) if ok else 0
+            self._json(200 if ok else 404, {"suspended": ok, "retracted": retracted})
         else:
             ok = self.app.auth.links.reinstate(discord_id, server)
             self._json(200 if ok else 404, {"reinstated": ok})

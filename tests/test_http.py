@@ -35,6 +35,8 @@ NOBODY_TOKEN = "SOME-RANDOM-TOKEN"
 FAKE_DISCORD_CODES = {"good-code-1": "discord-user-1", "good-code-2": "discord-user-2",
                        "good-code-3": "discord-user-suspend-test",
                        "good-code-e2e": "discord-user-e2e",
+                       "good-code-retract": "discord-user-retract-test",
+                       "good-code-retract-2": "discord-user-retract-other",
                        "admin-login-code": "discord-admin-1", "mod-login-code": "discord-mod-1"}
 
 
@@ -272,6 +274,40 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertTrue(body["resolved"])
 
+    def test_quash_requires_moderator_scope(self):
+        r = self.a_report(x=6500)
+        req("POST", self.url("/report"), token=FULL_TOKEN, body=r)
+        payload = {"server": SERVER, "road": r["road"], "seg": r["seg"],
+                   "along": r["along"], "cond": r["cond"]}
+        self.assertEqual(req("POST", self.url("/moderation/quash"), token=FULL_TOKEN, body=payload)[0], 403)
+        self.assertEqual(req("POST", self.url("/moderation/quash"), token=NOBODY_TOKEN, body=payload)[0], 403)
+
+    def test_quash_removes_a_published_condition(self):
+        r = self.a_report(x=6501)
+        req("POST", self.url("/report"), token=FULL_TOKEN, body=r)
+        payload = {"server": SERVER, "road": r["road"], "seg": r["seg"],
+                   "along": r["along"], "cond": r["cond"]}
+        code, body = req("POST", self.url("/moderation/quash"), token=MODERATOR_TOKEN, body=payload)
+        self.assertEqual(code, 200)
+        self.assertTrue(body["quashed"])
+        code, body = req("GET", self.url(f"/conditions/{SERVER}"))
+        self.assertFalse(any(c["along"] == r["along"] and c["road"] == r["road"]
+                              for c in body["conditions"]))
+
+    def test_quash_unknown_condition_is_404(self):
+        payload = {"server": SERVER, "road": 0, "seg": 0, "along": 999999, "cond": "HOLE"}
+        code, body = req("POST", self.url("/moderation/quash"), token=MODERATOR_TOKEN, body=payload)
+        self.assertEqual(code, 404)
+        self.assertFalse(body["quashed"])
+
+    def test_quash_rejects_unknown_server(self):
+        payload = {"server": "9b9t.org", "road": 0, "seg": 0, "along": 0, "cond": "HOLE"}
+        self.assertEqual(req("POST", self.url("/moderation/quash"), token=OWNER_TOKEN, body=payload)[0], 400)
+
+    def test_quash_is_scoped_to_its_own_server(self):
+        payload = {"server": SERVER2, "road": 0, "seg": 0, "along": 0, "cond": "HOLE"}
+        self.assertEqual(req("POST", self.url("/moderation/quash"), token=MODERATOR_TOKEN, body=payload)[0], 403)
+
     # --- registry: Owner only -----------------------------------------------------
     def test_registry_routes_require_owner(self):
         self.assertEqual(req("GET", self.url("/registry"), token=FULL_TOKEN)[0], 403)
@@ -428,6 +464,38 @@ class HttpTests(unittest.TestCase):
                           token=MODERATOR_TOKEN)
         self.assertEqual(code, 200)
         self.assertTrue(body["reinstated"])
+
+    def test_moderator_suspend_retracts_past_corroboration(self):
+        # Two dedicated identities (good-code-retract/-2), never touched by any other
+        # test -- reusing an identity that also reports elsewhere in this class would
+        # spuriously trip the reputation layer's travel-plausibility check, since this
+        # whole class shares one Store/real clock across all its test methods (see
+        # test_link_flow_end_to_end's identical note).
+        _, i1 = req("POST", self.url("/link/init"), body={"mcUid": "mc-uid-retract-1", "server": SERVER})
+        _, l1 = req("POST", self.url("/link/complete"),
+                     body={"linkCode": i1["code"], "discordCode": "good-code-retract"})
+        _, i2 = req("POST", self.url("/link/init"), body={"mcUid": "mc-uid-retract-2", "server": SERVER})
+        _, l2 = req("POST", self.url("/link/complete"),
+                     body={"linkCode": i2["code"], "discordCode": "good-code-retract-2"})  # a second, distinct identity
+
+        r = self.a_report(x=7300)
+        req("POST", self.url("/report"), token=l1["token"], body=r)
+        req("POST", self.url("/report"), token=l2["token"], body=r)
+        code, body = req("GET", self.url(f"/conditions/{SERVER}"))
+        at_spot = [c for c in body["conditions"] if c["along"] == r["along"] and c["road"] == r["road"]]
+        self.assertEqual(len(at_spot), 1, "sanity: two distinct identities corroborate a publish")
+
+        code, body = req("POST", self.url(f"/identity/{SERVER}/discord-user-retract-test/suspend"),
+                          token=MODERATOR_TOKEN)
+        self.assertEqual(code, 200)
+        self.assertTrue(body["suspended"])
+        self.assertEqual(body["retracted"], 1, "the suspended identity's one corroborating source is removed")
+
+        code, body = req("GET", self.url(f"/conditions/{SERVER}"))
+        at_spot = [c for c in body["conditions"] if c["along"] == r["along"] and c["road"] == r["road"]]
+        self.assertEqual(at_spot, [], "losing one of two corroborating sources drops it below k_tier_b")
+
+        req("POST", self.url(f"/identity/{SERVER}/discord-user-retract-test/reinstate"), token=MODERATOR_TOKEN)
 
 
 class AdminDashboardTests(unittest.TestCase):

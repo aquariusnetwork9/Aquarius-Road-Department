@@ -388,7 +388,13 @@ A `scope: moderator` token is issued for one `server` (§6.3) and can, **on that
   This is deliberately the scope of what moderators handle day-to-day: self-serve bad actors, the
   exact burden this role exists to take off the Owner. Suspension is also per-server — the same
   Discord identity linked on two servers (§6.2) can be suspended on one without touching the
-  other, matching a moderator's own server-scoped authority.
+  other, matching a moderator's own server-scoped authority. A suspend also **retracts** that
+  identity's corroborating contributions to every currently-active condition on that server —
+  its `sources` rows are removed immediately rather than lingering until `TTL`, so any condition
+  that was only published because of its corroboration is re-evaluated right away.
+- **Quash** a specific published condition (`road`, `seg`, `along`, `cond`) outright, on that
+  server only — removes the row and its corroborating sources immediately, logged to the
+  moderation table (`kind: "quash"`) for the same audit trail a reopen flag already gets.
 
 A `moderator` token explicitly does **not** grant: issuing or revoking any registry entry
 (§6.3), or revoking a Tier A/M token — pulling a token the Owner personally vouched for is an
@@ -456,6 +462,7 @@ cryptographic surface area worth its own careful pass rather than folding into t
 | `/moderation` | POST | **none (public, own rate limit — separate from the read limit)** | submit an anomaly for approval (`schema/moderation.schema.json`) |
 | `/moderation/<server>` | GET | `moderator` (or `admin`) scope **for that server**, token or dashboard session | list pending anomalies — §6.3 |
 | `/moderation/<id>/<approve\|reject>` | POST | `moderator`/`admin` scope for the entry's own server, token or session | resolve an anomaly — §6.5 |
+| `/moderation/quash` | POST | `moderator`/`admin` scope **for that server**, token or session | body `{server, road, seg, along, cond}` — removes a specific published condition outright — §6.5 |
 | `/identity/<server>/<discord_id>/suspend` | POST | `moderator`/`admin` scope **for that server**, token or session | suspend a Tier B (Discord) identity on that server only — §6.5 |
 | `/identity/<server>/<discord_id>/reinstate` | POST | `moderator`/`admin` scope **for that server**, token or session | reinstate a suspended Tier B identity on that server only — §6.5 |
 | `/registry` | POST/GET/DELETE | Owner (all servers) or a dashboard `admin` session (own server(s) only) | issue/list/revoke registry tokens of any scope; issuing requires `server` in the body — §6.3/§6.6 |

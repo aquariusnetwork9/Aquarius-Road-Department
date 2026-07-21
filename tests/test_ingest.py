@@ -241,6 +241,58 @@ class IngestTests(unittest.TestCase):
         self.assertTrue(self.store.resolve_moderation(mid, "approved"))
         self.assertEqual(self.store.list_moderation("pending"), [])
 
+    def test_quash_removes_a_published_condition(self):
+        r = self.report(6400, 0)
+        self.store.ingest(r, "10.0.0.1", "A")
+        rows = self.store.query(SERVER, road_idx=r["road"])
+        self.assertTrue(any(c["along"] == r["along"] for c in rows))
+        self.assertTrue(self.store.quash(SERVER, r["road"], r["seg"], r["along"], r["cond"]))
+        rows = self.store.query(SERVER, road_idx=r["road"], include_unpublished=True)
+        self.assertFalse(any(c["along"] == r["along"] for c in rows), "quash removes the row outright")
+
+    def test_quash_unknown_condition_returns_false(self):
+        self.assertFalse(self.store.quash(SERVER, 0, 0, 99999, "HOLE"))
+
+    def test_quash_unknown_server_raises(self):
+        with self.assertRaises(KeyError):
+            self.store.quash("9b9t.org", 0, 0, 0, "HOLE")
+
+    def test_quash_out_of_range_road_raises(self):
+        with self.assertRaises(ValueError):
+            self.store.quash(SERVER, 9999, 0, 0, "HOLE")
+
+    def test_quash_logs_an_approved_moderation_record(self):
+        r = self.report(6401, 0)
+        self.store.ingest(r, "10.0.0.1", "A")
+        self.store.quash(SERVER, r["road"], r["seg"], r["along"], r["cond"])
+        approved = self.store.list_moderation("approved", server=SERVER)
+        self.assertTrue(any(m["kind"] == "quash" for m in approved))
+
+    def test_retract_identity_removes_matching_source_only(self):
+        r = self.report(6402, 0)
+        self.store.ingest(r, "discord-a", "B")
+        v = self.store.ingest(r, "discord-b", "B")
+        self.assertEqual(v["distinctSources"], 2)
+        self.assertTrue(v["published"])
+        removed = self.store.retract_identity(SERVER, "discord-a")
+        self.assertEqual(removed, 1)
+        rows = self.store.query(SERVER, road_idx=r["road"], include_unpublished=True)
+        v2 = next(c for c in rows if c["along"] == r["along"])
+        self.assertEqual(v2["distinctSources"], 1)
+        self.assertFalse(v2["published"], "removing one of two corroborating sources drops below k_tier_b")
+
+    def test_retract_identity_does_not_touch_other_sources(self):
+        r = self.report(6403, 0)
+        self.store.ingest(r, "discord-a", "B")
+        self.store.ingest(r, "discord-b", "B")
+        self.store.retract_identity(SERVER, "discord-a")
+        rows = self.store.query(SERVER, road_idx=r["road"], include_unpublished=True)
+        v = next(c for c in rows if c["along"] == r["along"])
+        self.assertEqual(v["distinctSources"], 1, "the other identity's source must survive")
+
+    def test_retract_identity_unknown_server_returns_zero(self):
+        self.assertEqual(self.store.retract_identity("9b9t.org", "discord-a"), 0)
+
 
 class ReputationTests(unittest.TestCase):
     """Pragmatic reputation layer: travel-plausibility + trust-weighted corroboration
