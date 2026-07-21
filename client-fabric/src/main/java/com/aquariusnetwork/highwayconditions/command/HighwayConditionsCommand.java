@@ -132,10 +132,7 @@ public final class HighwayConditionsCommand {
     }
 
     private int setToken(CommandContext<FabricClientCommandSource> ctx) {
-        // .trim(): a token pasted from a browser selection commonly picks up a stray leading/
-        // trailing space, which would otherwise silently break auth in a way that's very hard
-        // to diagnose from a chat message alone.
-        String value = StringArgumentType.getString(ctx, "value").trim();
+        String value = StringArgumentType.getString(ctx, "value");
         cfg.reporter.token = value;
         cfg.save();
         ctx.getSource().sendFeedback(Text.literal("Highway Conditions token updated."));

@@ -64,14 +64,11 @@ public final class IngestClient {
     }
 
     /**
-     * GET /conditions/&lt;server&gt;?road=&lt;road&gt; -- fully public, no token required
-     * (PROTOCOL.md SS7, the 2026-07-19 read-policy lock-in). Used by the hazard-ahead HUD, never
-     * by report submission. Filtered server-side to one road (PROTOCOL.md SS7's documented
-     * {@code ?road=} query param) rather than fetching the whole network's conditions and
-     * filtering client-side -- both lighter on the ingest service and on this mod's own poll.
+     * GET /conditions/&lt;server&gt; -- fully public, no token required (PROTOCOL.md SS7, the
+     * 2026-07-19 read-policy lock-in). Used by the hazard-ahead HUD, never by report submission.
      */
-    public List<Condition> fetchConditions(String server, int road) throws Exception {
-        HttpRequest req = base("/conditions/" + server + "?road=" + road).GET().build();
+    public List<Condition> fetchConditions(String server) throws Exception {
+        HttpRequest req = base("/conditions/" + server).GET().build();
         HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
         if (resp.statusCode() != 200) {
             throw new RuntimeException("conditions HTTP " + resp.statusCode());
