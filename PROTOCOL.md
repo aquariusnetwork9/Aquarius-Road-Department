@@ -124,10 +124,11 @@ paths below — a proxy bot is not inherently more trusted than a player just be
 logged into a real Microsoft account; a player linking their own account gets that same
 guarantee.
 
-- **Tier A (vouched):** holds a maintainer-issued credential. Publishes at high confidence
-  without waiting for corroboration.
-- **Tier M (maintainer):** a narrower grant for highway-maintenance groups who do the physical
-  work of clearing obstructions.
+- **Tier M (maintainer/inspector — highest):** for highway-maintenance groups who do the
+  physical repair work. Their hazard reports and fix confirmations publish directly — an
+  inspector finding a clog, fixing it, and marking it cleared is one trusted cycle.
+- **Tier A (vouched reporter):** holds an admin-issued credential. New hazard reports publish
+  directly; marking an existing hazard resolved takes additional confirmation.
 - **Tier B (verified):** authenticated via a Discord identity with at least one linked,
   ownership-verified Minecraft UID (§6.1). Needs multiple independent identities to agree before
   publishing.
