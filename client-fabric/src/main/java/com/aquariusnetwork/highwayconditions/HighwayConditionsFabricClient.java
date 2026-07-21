@@ -9,12 +9,7 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
-import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
-import net.minecraft.util.Identifier;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -30,15 +25,16 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public final class HighwayConditionsFabricClient implements ClientModInitializer {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger("ard");
-
+    // HudRenderCallback is marked @Deprecated in this Fabric API build, but its replacement
+    // (HudElementRegistry) wasn't introduced until MC 1.21.6 -- at the 1.21.4 target this mod
+    // currently builds against, HudRenderCallback is the only working HUD-render hook. Migrate
+    // this registration when the mod's MC-version roadmap moves past 1.21.6.
+    @SuppressWarnings("deprecation")
     @Override
     public void onInitializeClient() {
         HighwayConditionsConfig cfg = HighwayConditionsConfig.load();
         GeoCache geoCache = new GeoCache();
-        // 3, not 2: geometry fetch/refresh, report flush, the HUD's conditions poll, and an
-        // on-demand /ard link call can all legitimately want a thread around the same moment.
-        ExecutorService executor = Executors.newFixedThreadPool(3, daemonThreadFactory());
+        ExecutorService executor = Executors.newFixedThreadPool(2, daemonThreadFactory());
 
         HighwayReporterModule reporter = new HighwayReporterModule(cfg, geoCache, executor);
         HazardHudElement hud = new HazardHudElement(cfg, geoCache, executor, reporter::currentClient);
@@ -47,31 +43,17 @@ public final class HighwayConditionsFabricClient implements ClientModInitializer
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             // Shared geometry fetch: neither the reporter nor the HUD owns this independently,
             // so they can never race two /geometry fetches or diverge on which Geo they're using.
-            geoCache.poll(cfg.reporter.server, reporter.currentClient(), executor,
-                g -> LOGGER.info("Highway Conditions: geometry loaded ({} roads, map {})",
-                    g.roads == null ? 0 : g.roads.size(), g.map),
-                ex -> LOGGER.warn("Highway Conditions: geometry fetch failed: {}", ex.toString()));
+            geoCache.poll(cfg.reporter.server, reporter.currentClient(), executor, g -> {}, ex -> {});
             reporter.tick(client);
             hud.tick(client);
         });
 
-        // MC 1.21.8's HUD registration API: HudElementRegistry (introduced at 1.21.6, replacing
-        // the 1.21.5-era HudLayerRegistrationCallback/LayeredDrawerWrapper this mod used before
-        // this hop). Attached just before vanilla chat so it inherits chat's own
-        // render-visibility condition (e.g. a hidden HUD).
-        HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT,
-            Identifier.of("ard", "hazard_ahead"), hud::render);
+        HudRenderCallback.EVENT.register(hud::render);
 
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
             command.register(dispatcher));
 
-        ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
-            var current = reporter.currentClient();
-            if (current != null) {
-                current.close();
-            }
-            executor.shutdown();
-        });
+        ClientLifecycleEvents.CLIENT_STOPPING.register(client -> executor.shutdown());
     }
 
     private static ThreadFactory daemonThreadFactory() {

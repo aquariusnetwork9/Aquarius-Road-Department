@@ -9,9 +9,6 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.render.RenderTickCounter;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -28,10 +25,9 @@ import java.util.function.Supplier;
  * policy lock-in -- no token needed), zero privacy cost, and works even with report submission
  * toggled off.
  *
- * <p>Registered against whichever HUD-layer API the current MC target actually has (see the
- * entrypoint) -- this class itself just exposes a plain {@link #render} method matching
- * {@code (DrawContext, RenderTickCounter)}, the one signature that's stayed constant across
- * {@code HudRenderCallback} / {@code LayeredDrawer.Layer} / {@code HudElement} so far.
+ * <p>Uses the classic {@code HudRenderCallback} API (correct for the MC 1.21.4 target -- the
+ * newer {@code HudElementRegistry} wasn't introduced until 1.21.6, see the plan's version notes
+ * for the migration this needs when the mod is later brought forward past that version).
  *
  * <p>Reuses the server's own re-derived {@code x}/{@code z} on each condition (see
  * {@code IngestClient.Condition}) rather than re-implementing (road,seg,along)->(x,z)
@@ -42,10 +38,7 @@ public final class HazardHudElement {
 
     private static final int MIN_POLL_SECONDS = 2;
     private static final int TEXT_COLOR = 0xFFFF5555;
-    private static final Logger LOGGER = LoggerFactory.getLogger("ard");
-    // Squared distance-per-tick threshold below which the player isn't considered to have a
-    // reliable direction of travel yet (~0.1 blocks/tick, i.e. 2 blocks/sec).
-    private static final double MOVING_DISTSQ_THRESHOLD = 0.01;
+    private static final double MOVING_EPSILON_SQ = 1.0; // ~1 block/tick^2 of movement
 
     private final HighwayConditionsConfig cfg;
     private final GeoCache geoCache;
@@ -94,11 +87,11 @@ public final class HazardHudElement {
             return;  // off-road: nothing to show, no point polling for this position either
         }
 
-        maybePoll(h, snap.road);
+        maybePoll(h);
         nearestAheadLabel = computeNearestAhead(snap.road, x, z, dx, dz);
     }
 
-    private void maybePoll(HighwayConditionsConfig.Hud h, int road) {
+    private void maybePoll(HighwayConditionsConfig.Hud h) {
         long now = System.currentTimeMillis();
         long pollMs = (long) Math.max(h.pollSeconds, MIN_POLL_SECONDS) * 1000L;
         if (now - lastPollMs < pollMs) {
@@ -115,9 +108,8 @@ public final class HazardHudElement {
         String server = cfg.reporter.server;
         executor.execute(() -> {
             try {
-                cached = client.fetchConditions(server, road);
-            } catch (Exception ex) {
-                LOGGER.debug("Highway Conditions: HUD conditions poll failed: {}", ex.toString());
+                cached = client.fetchConditions(server);
+            } catch (Exception ignored) {
                 // keep the previous cache; the next scheduled poll simply tries again
             } finally {
                 polling.set(false);
@@ -134,7 +126,7 @@ public final class HazardHudElement {
         if (conditions.isEmpty()) {
             return null;
         }
-        boolean moving = dx * dx + dz * dz > MOVING_DISTSQ_THRESHOLD;
+        boolean moving = dx * dx + dz * dz > MOVING_EPSILON_SQ * 0.01;
         String best = null;
         double bestDist = Double.MAX_VALUE;
         for (IngestClient.Condition c : conditions) {

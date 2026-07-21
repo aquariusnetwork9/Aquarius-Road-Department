@@ -3,8 +3,6 @@ package com.aquariusnetwork.highwayconditions;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import net.fabricmc.loader.api.FabricLoader;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -76,46 +74,24 @@ public class HighwayConditionsConfig {
         public int pollSeconds = 5;
     }
 
-    private static final Logger LOGGER = LoggerFactory.getLogger("ard");
-
     /** Loads from the Fabric config dir, tolerating a missing or corrupt file by falling back to
-     *  defaults and immediately re-writing -- never crashes mod init over a bad config file.
-     *  A corrupt/unparseable file is backed up to {@code ard.json.bad} rather than silently
-     *  overwritten -- it may hold a token or other setting worth recovering by hand, and a
-     *  silent reset would otherwise look like the mod "forgot" it. */
+     *  defaults and immediately re-writing -- never crashes mod init over a bad config file. */
     public static HighwayConditionsConfig load() {
         Path path = configPath();
         if (Files.exists(path)) {
-            boolean broken = false;
             try {
                 String json = Files.readString(path, StandardCharsets.UTF_8);
                 HighwayConditionsConfig cfg = GSON.fromJson(json, HighwayConditionsConfig.class);
                 if (cfg != null) {
                     return cfg;
                 }
-                LOGGER.warn("{} parsed to nothing (empty/null JSON) -- resetting to defaults", FILE_NAME);
-                broken = true;
-            } catch (Exception ex) {
-                LOGGER.warn("Failed to parse {} -- resetting to defaults", FILE_NAME, ex);
-                broken = true;
-            }
-            if (broken) {
-                backupBrokenFile(path);
+            } catch (Exception ignored) {
+                // missing/corrupt -- fall through to defaults
             }
         }
         HighwayConditionsConfig cfg = new HighwayConditionsConfig();
         cfg.save();
         return cfg;
-    }
-
-    private static void backupBrokenFile(Path path) {
-        Path backup = path.resolveSibling(FILE_NAME + ".bad");
-        try {
-            Files.move(path, backup, StandardCopyOption.REPLACE_EXISTING);
-            LOGGER.warn("Backed up the broken config to {}", backup);
-        } catch (IOException ex) {
-            LOGGER.warn("Could not back up the broken config to {}", backup, ex);
-        }
     }
 
     /** Writes to a sibling temp file then atomically moves it into place, so a crash mid-write

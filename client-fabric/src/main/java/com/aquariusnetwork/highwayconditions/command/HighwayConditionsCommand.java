@@ -15,7 +15,6 @@ import net.minecraft.text.ClickEvent;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 
-import java.net.URI;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 
@@ -117,7 +116,7 @@ public final class HighwayConditionsCommand {
                 mc.execute(() -> {
                     Text clickable = Text.literal("[click to finish linking]")
                         .styled(style -> style
-                            .withClickEvent(new ClickEvent.OpenUrl(URI.create(url)))
+                            .withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, url))
                             .withFormatting(Formatting.UNDERLINE, Formatting.AQUA));
                     src.sendFeedback(Text.literal("Your link code: " + code + "  ").append(clickable));
                     src.sendFeedback(Text.literal("After you finish on the website, copy your token "
@@ -132,10 +131,7 @@ public final class HighwayConditionsCommand {
     }
 
     private int setToken(CommandContext<FabricClientCommandSource> ctx) {
-        // .trim(): a token pasted from a browser selection commonly picks up a stray leading/
-        // trailing space, which would otherwise silently break auth in a way that's very hard
-        // to diagnose from a chat message alone.
-        String value = StringArgumentType.getString(ctx, "value").trim();
+        String value = StringArgumentType.getString(ctx, "value");
         cfg.reporter.token = value;
         cfg.save();
         ctx.getSource().sendFeedback(Text.literal("Highway Conditions token updated."));

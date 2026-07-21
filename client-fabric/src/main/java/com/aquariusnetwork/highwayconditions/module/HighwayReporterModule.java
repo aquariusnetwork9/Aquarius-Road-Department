@@ -15,9 +15,6 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.world.World;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -46,7 +43,6 @@ public class HighwayReporterModule {
      *  service -- this network's whole premise depends on contributors being well-behaved. */
     private static final int MIN_FLUSH_INTERVAL_TICKS = 20;   // 1s @ 20 tick/s
     private static final int MIN_RESEND_SECONDS = 10;
-    private static final Logger LOGGER = LoggerFactory.getLogger("ard");
 
     private final HighwayConditionsConfig cfg;
     private final GeoCache geoCache;
@@ -112,7 +108,6 @@ public class HighwayReporterModule {
 
         Geo g = geoCache.get();
         if (g == null) {
-            obstructionWatcher.reset();
             return;  // still bootstrapping; the shared GeoCache is fetching off-thread
         }
         if (mc.player == null || mc.world == null) {
@@ -355,11 +350,8 @@ public class HighwayReporterModule {
                 int code = c.postReports(out);
                 if (code == 200) {
                     markSent(out, System.currentTimeMillis() / 1000L, resendSeconds);
-                } else {
-                    LOGGER.debug("Highway Conditions: ingest returned HTTP {}", code);
                 }
-            } catch (Exception ex) {
-                LOGGER.debug("Highway Conditions: report POST failed: {}", ex.toString());
+            } catch (Exception ignored) {
                 // transient network failure -- lastSent is untouched, so the next tick's pass
                 // over this segment (or the next scheduled flush) will simply try again.
             }
