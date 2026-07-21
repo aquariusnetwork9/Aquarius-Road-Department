@@ -50,9 +50,15 @@ MC-version ports — a bare `v0.1.0` alone wouldn't distinguish which MC target 
   detector (`module/ObstructionWatcher.java`, ported verbatim — pure math, no game-API
   dependency). Off by default (opt-in), toggled via `/ard reporting on|off`.
 - **Account linking** — `/ard link` requests a device-code-style link code
-  (PROTOCOL.md §6.1) using your already-authenticated Minecraft session UUID, and posts it to
-  chat with a one-click link to the website's Discord-login flow. Once you finish there, copy
-  the shown token and run `/ard token <value>` to actually start reporting as Tier B.
+  (PROTOCOL.md §6.2) using your already-authenticated Minecraft session UUID, proves you hold
+  that account directly to Mojang (a real `session/minecraft/join` call via the game's own
+  session service — the same call vanilla makes joining any online-mode server, just pointed at
+  a one-time nonce ARD hands back instead of a real server), then posts the code to chat with a
+  one-click link to the website's Discord-login flow. Once you finish there, copy the shown
+  token and run `/ard token <value>` to actually start reporting as Tier B. The ownership-proof
+  step is best-effort from this mod's side (a failure is reported to chat but doesn't block
+  getting a link code) — whether it's actually *required* to complete linking is a server-side
+  deployment setting, off by default until enough of the fleet runs a build that supports it.
 
 No coordinate ever leaves this module except as `(road, seg, along)` — same hard guarantee as
 the proxy plugin, enforced independently (never trust the other producer to have done it).

@@ -89,12 +89,20 @@ public final class HighwayConditionsCommand {
         return 1;
     }
 
-    /** Requests a device-code-style link code (PROTOCOL.md SS6.1) and posts it to chat with a
-     *  clickable link that pre-fills the code on the website -- confirmed against link.js's own
-     *  {@code ?linkCode=} query-param handling, a genuine one-click flow rather than a bare URL
-     *  the player has to retype an 8-character code into. There's no server-side callback that
-     *  hands the finished token back to this client, so the loop closes with {@code /ard token}
-     *  once the player copies it from the website. */
+    /** Requests a device-code-style link code (PROTOCOL.md SS6.2), proves ownership of this
+     *  Minecraft account to Mojang directly (SS6.2 step 1.5 -- this client's OWN
+     *  {@code session/minecraft/join} call using its live session's access token and the
+     *  server-issued {@code verifyServerId} nonce; ARD itself never sees the access token),
+     *  then posts the link code to chat with a clickable link that pre-fills it on the website
+     *  -- confirmed against link.js's own {@code ?linkCode=} query-param handling, a genuine
+     *  one-click flow rather than a bare URL the player has to retype an 8-character code into.
+     *  There's no server-side callback that hands the finished token back to this client, so the
+     *  loop closes with {@code /ard token} once the player copies it from the website.
+     *
+     *  <p>If the ownership-proof step itself fails (Mojang rejects the join, or this account is
+     *  offline/cracked and has no real session to prove), the link code is still handed to the
+     *  player -- {@code /link/complete} is the one that ultimately enforces the gate (and only
+     *  when the deployment has it enabled), not this client. */
     private int link(CommandContext<FabricClientCommandSource> ctx) {
         FabricClientCommandSource src = ctx.getSource();
         MinecraftClient mc = MinecraftClient.getInstance();
@@ -112,7 +120,11 @@ public final class HighwayConditionsCommand {
         src.sendFeedback(Text.literal("Requesting a link code..."));
         executor.execute(() -> {
             try {
-                String code = client.initLink(server, uid);
+                IngestClient.LinkInit init = client.initLink(server, uid);
+                String code = init.code;
+                if (init.verifyServerId != null && !init.verifyServerId.isBlank()) {
+                    proveOwnership(mc, uid, init.verifyServerId, client, code, src);
+                }
                 String url = WEBSITE_BASE + "/link.html?linkCode=" + code;
                 mc.execute(() -> {
                     Text clickable = Text.literal("[click to finish linking]")
@@ -129,6 +141,27 @@ public final class HighwayConditionsCommand {
             }
         });
         return 1;
+    }
+
+    /** The ownership-proof handshake itself: a real {@code session/minecraft/join} call this
+     *  client makes directly to Mojang (via the game's own session service, reached through
+     *  {@code MinecraftClient.getApiServices().sessionService()} -- the identical call vanilla
+     *  makes joining any online-mode server) using {@code verifyServerId} as the "server ID",
+     *  then tells ARD to confirm it via {@code /link/verify-ownership}. Deliberately best-effort:
+     *  a failure here (Mojang rejects the join, this is an offline/cracked account with no real
+     *  session, or ARD's confirmation call itself fails) is reported to chat but does not abort
+     *  the link flow -- see {@link #link}'s own note on why. */
+    private void proveOwnership(MinecraftClient mc, UUID uid, String verifyServerId,
+                                IngestClient client, String code, FabricClientCommandSource src) {
+        try {
+            mc.getApiServices().sessionService()
+                .joinServer(uid, mc.getSession().getAccessToken(), verifyServerId);
+            client.verifyOwnership(code);
+        } catch (Exception ex) {
+            mc.execute(() -> src.sendError(Text.literal(
+                "Could not prove account ownership to Mojang (" + ex.getMessage() + ") -- "
+                + "linking may fail on the website if this server requires it.")));
+        }
     }
 
     private int setToken(CommandContext<FabricClientCommandSource> ctx) {

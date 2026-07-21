@@ -96,8 +96,11 @@ public final class IngestClient {
     }
 
     /** POST /link/init {mcUid, server} -- unauthenticated; mints a short-lived link code the
-     *  human then completes via the website's Discord OAuth flow (PROTOCOL.md SS6.1). */
-    public String initLink(String server, UUID mcUid) throws Exception {
+     *  human then completes via the website's Discord OAuth flow (PROTOCOL.md SS6.2), plus a
+     *  {@code verifyServerId} nonce for the Mojang ownership-proof handshake (SS6.2 step 1.5):
+     *  the caller performs its own {@code session/minecraft/join} against Mojang using that
+     *  nonce, then calls {@link #verifyOwnership}. */
+    public LinkInit initLink(String server, UUID mcUid) throws Exception {
         Map<String, Object> body = Map.of("mcUid", mcUid.toString(), "server", server);
         HttpRequest req = base("/link/init")
             .header("Content-Type", "application/json")
@@ -111,11 +114,28 @@ public final class IngestClient {
         if (parsed == null || parsed.code == null) {
             throw new RuntimeException("link/init returned no code");
         }
-        return parsed.code;
+        return parsed;
     }
 
-    private static final class LinkInit {
-        String code;
+    public static final class LinkInit {
+        public String code;
+        public String verifyServerId;
+    }
+
+    /** POST /link/verify-ownership {linkCode} -- confirms the ownership proof the caller just
+     *  performed against Mojang directly (see {@link #initLink}'s {@code verifyServerId}).
+     *  Required before {@code /link/complete}/{@code /link/bot-complete} will mint a token,
+     *  unless the deployment has the gate disabled (PROTOCOL.md SS6.2 step 1.5). */
+    public void verifyOwnership(String linkCode) throws Exception {
+        Map<String, Object> body = Map.of("linkCode", linkCode);
+        HttpRequest req = base("/link/verify-ownership")
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(gson.toJson(body)))
+            .build();
+        HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
+        if (resp.statusCode() != 200) {
+            throw new RuntimeException("link/verify-ownership HTTP " + resp.statusCode() + ": " + resp.body());
+        }
     }
 
     /** Releases the underlying HTTP client's connection pool/threads. Safe to call from any
