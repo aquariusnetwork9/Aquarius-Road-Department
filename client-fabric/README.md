@@ -23,17 +23,27 @@ own separate release — pick the one matching your own game version, not just "
 
 | MC version | Release | HUD API used |
 |---|---|---|
-| 1.21.4 | [client-fabric-v0.1.0+1.21.4](https://github.com/aquariusnetwork9/Aquarius-Road-Department/releases/tag/client-fabric-v0.1.0+1.21.4) | `HudRenderCallback` |
-| 1.21.5 | [client-fabric-v0.1.0+1.21.5](https://github.com/aquariusnetwork9/Aquarius-Road-Department/releases/tag/client-fabric-v0.1.0+1.21.5) | `HudLayerRegistrationCallback` |
-| 1.21.8 | [client-fabric-v0.1.0+1.21.8](https://github.com/aquariusnetwork9/Aquarius-Road-Department/releases/tag/client-fabric-v0.1.0+1.21.8) | `HudElementRegistry` |
-| 1.21.10 | [client-fabric-v0.1.0+1.21.10](https://github.com/aquariusnetwork9/Aquarius-Road-Department/releases/tag/client-fabric-v0.1.0+1.21.10) | `HudElementRegistry` |
-| 1.21.11 | [client-fabric-v0.1.0+1.21.11](https://github.com/aquariusnetwork9/Aquarius-Road-Department/releases/tag/client-fabric-v0.1.0+1.21.11) | `HudElementRegistry` |
+| 1.21.4 | [client-fabric-v0.2.0+1.21.4](https://github.com/aquariusnetwork9/Aquarius-Road-Department/releases/tag/client-fabric-v0.2.0+1.21.4) | `HudRenderCallback` |
+| 1.21.5 | [client-fabric-v0.2.0+1.21.5](https://github.com/aquariusnetwork9/Aquarius-Road-Department/releases/tag/client-fabric-v0.2.0+1.21.5) | `HudLayerRegistrationCallback` |
+| 1.21.8 | [client-fabric-v0.2.0+1.21.8](https://github.com/aquariusnetwork9/Aquarius-Road-Department/releases/tag/client-fabric-v0.2.0+1.21.8) | `HudElementRegistry` |
+| 1.21.10 | [client-fabric-v0.2.0+1.21.10](https://github.com/aquariusnetwork9/Aquarius-Road-Department/releases/tag/client-fabric-v0.2.0+1.21.10) | `HudElementRegistry` |
+| 1.21.11 | [client-fabric-v0.2.0+1.21.11](https://github.com/aquariusnetwork9/Aquarius-Road-Department/releases/tag/client-fabric-v0.2.0+1.21.11) | `HudElementRegistry` |
 
 All five are marked **pre-release** for the reason above — each one is GitHub-Actions-built
 from the real commit where the mod actually targeted that MC version (never hand-uploaded), but
 none has been run in a live game session yet. The tag format (`v<mod version>+<mc version>`)
 matches Fabric API's own convention, since this mod's own version hasn't changed between
-MC-version ports — a bare `v0.1.0` alone wouldn't distinguish which MC target you got.
+MC-version ports — a bare `v0.2.0` alone wouldn't distinguish which MC target you got.
+
+**v0.2.0 note:** `main` carries the actual, evolving mod at its current target (1.21.11); the
+1.21.4/1.21.5/1.21.8/1.21.10 releases above are built from short-lived `release/client-fabric-*`
+branches carrying the identical featureset with only the per-version differences described below
+— they're not meant to be merged, they exist so every previously-shipped MC target gets the new
+capability too, matching this project's own "every MC version gets rebuilt" precedent. (One thing
+worth knowing if you compare release history: the four non-1.21.10 tags under the old **v0.1.1**
+line were all accidentally built from the same 1.21.10 commit — a real labeling bug from before
+this pass, left as-is in release history rather than silently rewritten; v0.2.0 is the first
+release line where all five tags actually contain what their MC-version label says.)
 
 ## What it does
 
@@ -145,6 +155,19 @@ constructor). **Caught by an actual compile failure, not assumed**: the first at
 1.21.11 port assumed `OpenUrl` took a `String` (following an LLM-summarized javadoc that got the
 parameter type wrong); the real compiler error corrected it to `URI`. Unchanged since.
 
+**`MinecraftClient`'s session-service accessor also changed, discovered during the v0.2.0
+five-version pass** (`/ard link`'s Mojang ownership-proof call, `HighwayConditionsCommand`):
+
+| MC version | Session service access |
+|---|---|
+| 1.21.4, 1.21.5, 1.21.8 | `mc.getSessionService()` directly, returns `MinecraftSessionService` |
+| 1.21.10, 1.21.11 (current) | `mc.getApiServices().sessionService()` — `ApiServices` is a new record wrapping session service + a few other identity-related services |
+
+Confirmed by loading each version's actual mapped Minecraft jar and inspecting `MinecraftClient`'s
+declared methods directly (`javap`), not assumed — this account-linking feature was added to the
+codebase after the original 1.21.4/1.21.5/1.21.8 ports had already moved on, so nothing had ever
+compiled it against those older mappings before.
+
 ## Hardening pass (2026-07-20)
 
 Alongside the 1.21.5 port, a review pass over the whole mod fixed several real robustness gaps
@@ -173,6 +196,20 @@ found by re-reading every file critically rather than assuming the first-pass co
 - A missing `ObstructionWatcher.reset()` call (on the "geometry not loaded yet" early-return)
   was filled in for consistency with every other early-return in the tick gate, even though it's
   low-impact in practice (only reachable during the initial bootstrap window).
+
+## v0.2.0: new featureset, ported to every published MC version (2026-09-07)
+
+Local hazard alert + addon API + optional Baritone auto-avoid (see "What it does" above) shipped
+as a PR against the then-current 1.21.10 target, then the mod hopped to 1.21.11 (Baritone's own
+actual supported version) and the identical featureset was rebuilt against every other
+previously-published MC version (1.21.4, 1.21.5, 1.21.8, 1.21.10) from short-lived
+`release/client-fabric-*` branches — see the Downloads table above for all five v0.2.0 releases.
+
+Real, previously-undiscovered API drift turned up doing this (this account-linking codepath had
+never actually been compiled against pre-1.21.10 mappings before): `MinecraftClient`'s session
+service moved from a direct `getSessionService()` to `getApiServices().sessionService()` somewhere
+around 1.21.9/1.21.10 — confirmed by loading each version's real mapped jar with `javap`, not
+assumed. See the version table above.
 
 ## Building
 
