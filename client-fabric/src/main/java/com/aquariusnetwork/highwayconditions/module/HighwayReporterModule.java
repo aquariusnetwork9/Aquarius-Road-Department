@@ -9,7 +9,6 @@ import com.aquariusnetwork.highwayconditions.net.Report;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.entity.decoration.ItemFrameEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
@@ -19,7 +18,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -221,78 +219,23 @@ public class HighwayReporterModule {
     }
 
     // --- obstruction classification (only runs once ObstructionWatcher confirms a real stall) ---
+    // Delegates the actual cross-section scan to LaneScan, shared with LocalHazardModule's
+    // always-on local alert so the two paths can never classify the same stall differently.
     private void enqueueObstructionIfPhysical(MinecraftClient mc, Geo g, HighwayConditionsConfig.Reporter r,
                                               Geo.Snap snap, double x, double z,
                                               ObstructionWatcher.Trigger trig, long ts) {
         Geo.Road road = g.roadByIndex(snap.road);
-        if (road == null || road.segments == null || snap.seg >= road.segments.length) {
+        LaneScan.Frame frame = LaneScan.frame(road, snap.seg);
+        if (frame == null) {
             return;
         }
-        int[] seg = road.segments[snap.seg];
-        double dx = seg[2] - seg[0], dz = seg[3] - seg[1];
-        double len = Math.hypot(dx, dz);
-        if (len == 0) {
-            return;
-        }
-        double perpX = -(dz / len), perpZ = dx / len;
-        int width = road.roadWidth(6);
-        int half = Math.max(1, width / 2);
-
-        List<Integer> blocked = new ArrayList<>();
-        for (int w = -half; w <= half; w++) {
-            double lx = x + perpX * w, lz = z + perpZ * w;
-            if (laneBlocked(mc, lx, lz, g.roadY)) {
-                blocked.add(w);
-            }
-        }
-        if (blocked.isEmpty()) {
+        LaneScan.Classification c = LaneScan.classify(mc, frame, x, z, g.roadY);
+        if (c == null) {
             return;  // nothing physically there -> the stall had some other cause; don't report
         }
-
-        boolean full = blocked.size() >= (2 * half + 1);
-        Map<String, Object> rep;
-        if (full) {
-            rep = Report.obstruction(r.server, g.map, snap.road, snap.seg, snap.along,
-                true, 0, 0, trig.sev, ts);
-        } else {
-            int lo = Collections.min(blocked), hi = Collections.max(blocked);
-            rep = Report.obstruction(r.server, g.map, snap.road, snap.seg, snap.along,
-                false, lo, hi, trig.sev, ts);
-        }
+        Map<String, Object> rep = Report.obstruction(r.server, g.map, snap.road, snap.seg, snap.along,
+            c.full, c.laneMin, c.laneMax, trig.sev, ts);
         batch.add(rep);
-    }
-
-    /** A lane counts as blocked if it has a solid non-water block in its clear column, or an
-     *  item-frame entity sitting in it. Deliberately no sign/item-frame exclusion here -- by the
-     *  time this runs, ObstructionWatcher already confirmed a real >=3s stall, so whatever is
-     *  physically present is relevant regardless of type (see that class's javadoc). */
-    private boolean laneBlocked(MinecraftClient mc, double x, double z, int roadY) {
-        int bx = (int) Math.floor(x), bz = (int) Math.floor(z);
-        for (int dy = 1; dy <= 3; dy++) {
-            BlockState state = blockAt(mc, bx, roadY + dy, bz);
-            if (state != null && !state.isAir() && !state.isOf(Blocks.WATER)) {
-                return true;
-            }
-        }
-        return nearbyItemFrame(mc, x, z, roadY);
-    }
-
-    /** {@link net.minecraft.entity.decoration.GlowItemFrameEntity} extends {@link ItemFrameEntity}
-     *  in vanilla, so scanning for {@code ItemFrameEntity} alone already covers both -- no
-     *  separate glow-item-frame check needed (unlike the proxy's entity-type-based iteration). */
-    private boolean nearbyItemFrame(MinecraftClient mc, double x, double z, int roadY) {
-        if (mc.world == null) {
-            return false;
-        }
-        Box box = new Box(x - 2, roadY - 1, z - 2, x + 2, roadY + 5, z + 2);
-        List<ItemFrameEntity> frames = mc.world.getEntitiesByClass(ItemFrameEntity.class, box, e -> true);
-        for (ItemFrameEntity e : frames) {
-            double dx = e.getX() - x, dz = e.getZ() - z, dy = e.getY() - roadY;
-            if (dx * dx + dz * dz <= 1.0 && dy >= 0 && dy <= 4) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private int nearbyPlayers(MinecraftClient mc, double x, double z, int radius) {

@@ -1,6 +1,8 @@
 package com.aquariusnetwork.highwayconditions.hud;
 
 import com.aquariusnetwork.highwayconditions.HighwayConditionsConfig;
+import com.aquariusnetwork.highwayconditions.api.LocalHazard;
+import com.aquariusnetwork.highwayconditions.module.LocalHazardModule;
 import com.aquariusnetwork.highwayconditions.net.Geo;
 import com.aquariusnetwork.highwayconditions.net.GeoCache;
 import com.aquariusnetwork.highwayconditions.net.IngestClient;
@@ -42,6 +44,9 @@ public final class HazardHudElement {
 
     private static final int MIN_POLL_SECONDS = 2;
     private static final int TEXT_COLOR = 0xFFFF5555;
+    // Brighter/more urgent than the crowdsourced line's color -- this one is a live, right-here,
+    // zero-latency detection of your own client's own stall, not a possibly-stale network read.
+    private static final int LOCAL_TEXT_COLOR = 0xFFFF0000;
     private static final Logger LOGGER = LoggerFactory.getLogger("ard");
     // Squared distance-per-tick threshold below which the player isn't considered to have a
     // reliable direction of travel yet (~0.1 blocks/tick, i.e. 2 blocks/sec).
@@ -51,27 +56,32 @@ public final class HazardHudElement {
     private final GeoCache geoCache;
     private final ExecutorService executor;
     private final Supplier<IngestClient> clientSupplier;
+    private final LocalHazardModule localHazard;
 
     private final AtomicBoolean polling = new AtomicBoolean(false);
     private volatile long lastPollMs = 0;
     private volatile List<IngestClient.Condition> cached = List.of();
     private volatile String nearestAheadLabel = null;
+    private volatile String localHazardLabel = null;
 
     private double lastX = Double.NaN;
     private double lastZ = Double.NaN;
 
     public HazardHudElement(HighwayConditionsConfig cfg, GeoCache geoCache, ExecutorService executor,
-                            Supplier<IngestClient> clientSupplier) {
+                            Supplier<IngestClient> clientSupplier, LocalHazardModule localHazard) {
         this.cfg = cfg;
         this.geoCache = geoCache;
         this.executor = executor;
         this.clientSupplier = clientSupplier;
+        this.localHazard = localHazard;
     }
 
     /** Call from END_CLIENT_TICK every tick -- computation happens here (consistent tick-rate
      *  cadence), {@link #render} only ever reads the already-computed label. */
     public void tick(MinecraftClient mc) {
         HighwayConditionsConfig.Hud h = cfg.hud;
+        localHazardLabel = h.localAlertEnabled ? localHazardLabel(localHazard.current()) : null;
+
         if (!h.enabled || mc.player == null || mc.world == null) {
             nearestAheadLabel = null;
             return;
@@ -157,12 +167,29 @@ public final class HazardHudElement {
         return best;
     }
 
-    public void render(DrawContext context, RenderTickCounter tickCounter) {
-        String label = nearestAheadLabel;
-        if (label == null) {
-            return;
+    /** Formats {@link LocalHazardModule}'s current hazard for display -- a plain function so it's
+     *  trivially unit-testable and doesn't need a live {@code LocalHazard} to be called. */
+    private static String localHazardLabel(LocalHazard hazard) {
+        if (hazard == null) {
+            return null;
         }
+        String what = hazard.fullyBlocked()
+            ? "full blockage"
+            : "partial blockage (lanes " + hazard.laneMin() + ".." + hazard.laneMax() + ")";
+        return what + " right here -- sev " + hazard.severity();
+    }
+
+    public void render(DrawContext context, RenderTickCounter tickCounter) {
         MinecraftClient mc = MinecraftClient.getInstance();
-        context.drawTextWithShadow(mc.textRenderer, "⚠ " + label, 6, 6, TEXT_COLOR);
+        int y = 6;
+        String local = localHazardLabel;
+        if (local != null) {
+            context.drawTextWithShadow(mc.textRenderer, "⚠ LOCAL: " + local, 6, y, LOCAL_TEXT_COLOR);
+            y += 10;
+        }
+        String label = nearestAheadLabel;
+        if (label != null) {
+            context.drawTextWithShadow(mc.textRenderer, "⚠ " + label, 6, y, TEXT_COLOR);
+        }
     }
 }

@@ -44,6 +44,39 @@ MC-version ports — a bare `v0.1.0` alone wouldn't distinguish which MC target 
   few seconds, filters to the road you're currently on, and shows the nearest upcoming hazard
   ahead of your direction of travel as a small on-screen line. On by default, independent of
   report submission — it's a pure read with zero privacy cost.
+- **Local hazard alert** (`module/LocalHazardModule.java`) — a second, always-on HUD line (`⚠
+  LOCAL: ...`) fed entirely by *this client's own* live detection, with no network round-trip and
+  no trust-tier gate: the same stall-watchdog/lane-scan classification the reporter uses
+  (`ObstructionWatcher` + the shared `module/LaneScan.java`), but surfaced the instant it fires
+  instead of waiting for a report to be submitted, corroborated, and published. Runs regardless
+  of `/ard reporting on|off` — nothing here ever leaves the client, so it's on by default
+  (`ard.json`'s `hud.localAlertEnabled`), same reasoning as the crowdsourced line.
+- **Public API for other mods** (`api/LocalHazardEvents.java`, `api/LocalHazard.java`) — the
+  local detection above is also fired as a plain Fabric event, so a Meteor addon (or any other
+  Fabric mod) can react to it directly instead of re-implementing detection:
+  ```java
+  LocalHazardEvents.DETECTED.register(hazard -> {
+      // hazard.x()/y()/z(), hazard.headingX()/headingZ(), hazard.perpX()/perpZ(),
+      // hazard.fullyBlocked(), hazard.laneMin()/laneMax(), hazard.severity()
+  });
+  LocalHazardEvents.CLEARED.register(() -> { /* the last hazard is no longer active */ });
+  ```
+  Everything in the `api` package is the stable surface this project intends third parties to
+  depend on; everything outside it is internal and can change without notice. No coupling runs
+  the other way — ARD has no idea what (if anything) is listening.
+- **Optional Baritone auto-avoid** (`module/BaritoneAvoidance.java`) — opt-in
+  (`/ard baritone on|off`, default off), consumes the exact same public API a third-party addon
+  would. On a detected hazard it reflectively drives Baritone's own
+  `BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().setGoalAndPath(...)`
+  to a detour point past the blocked lanes, then hands control back once the hazard clears (or
+  after a 10s timeout). **Zero compile-time or runtime dependency on Baritone** — this mod's
+  standing "no coupling to another client's internal API" rule applies to Baritone exactly like
+  it does to Meteor/RusherHack/LambdaClient; Baritone's presence and API shape are feature-probed
+  once via reflection and everything degrades to "disabled, one log line" if it's missing or
+  doesn't match. Practical note: as of writing, Baritone's newest release targets Minecraft
+  1.21.11 and has no 1.21.10 build (this mod's current target) — so this feature is real, tested
+  code that simply won't have anything to talk to until either side's version catches up to the
+  other.
 - **Report submission** (`module/HighwayReporterModule.java`) — a Fabric-native port of
   [`plugin-aquarius`](../plugin-aquarius)'s reporter module: same gate order (nether → radius
   cap → on-road snap → strict y120), same LAVA/COBWEB/HOLE sampling, same behavioral obstruction
