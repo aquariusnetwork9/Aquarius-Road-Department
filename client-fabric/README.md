@@ -11,12 +11,12 @@ picking up plain-Fabric players too — without coupling to any one client's int
 cadence, and room for a real custom UI instead of squeezing into someone else's module-list
 styling.
 
-**Status (2026-07-20): Phase 1 shipped + a hardening pass, not yet runtime-verified.** Builds
-clean locally (`./gradlew build`) and via CI against Minecraft **1.21.10** (walking the version
-range deliberately: 1.21.4 → 1.21.11 → 1.21.5 → 1.21.8 → **1.21.10** here, the last stop before
-the already-shipped 1.21.11, rather than jumping straight to newest). Actually joining 2b2t/6b6t
-with this mod loaded hasn't happened yet — that's the necessary next step, the human-run
-equivalent of this project's "goldfarm before any release" standing order for the proxy plugins.
+**Status (2026-09-07): local hazard alert + addon API + optional Baritone auto-avoid shipped,
+not yet runtime-verified.** Builds clean locally (`./gradlew build`) and via CI against Minecraft
+**1.21.11** (hopped forward from 1.21.10 for this featureset specifically — see
+[Minecraft version](#minecraft-version) below). Actually joining 2b2t/6b6t with this mod loaded
+hasn't happened yet — that's the necessary next step, the human-run equivalent of this project's
+"goldfarm before any release" standing order for the proxy plugins.
 
 **Download:** every MC version this mod has been ported to and rebuilt for is published as its
 own separate release — pick the one matching your own game version, not just "the latest":
@@ -73,10 +73,9 @@ MC-version ports — a bare `v0.1.0` alone wouldn't distinguish which MC target 
   standing "no coupling to another client's internal API" rule applies to Baritone exactly like
   it does to Meteor/RusherHack/LambdaClient; Baritone's presence and API shape are feature-probed
   once via reflection and everything degrades to "disabled, one log line" if it's missing or
-  doesn't match. Practical note: as of writing, Baritone's newest release targets Minecraft
-  1.21.11 and has no 1.21.10 build (this mod's current target) — so this feature is real, tested
-  code that simply won't have anything to talk to until either side's version catches up to the
-  other.
+  doesn't match. This mod hopped its own target to **1.21.11** specifically so this feature has
+  something to talk to — Baritone's newest release targets 1.21.11 and, as of writing, has no
+  1.21.10 build at all.
 - **Report submission** (`module/HighwayReporterModule.java`) — a Fabric-native port of
   [`plugin-aquarius`](../plugin-aquarius)'s reporter module: same gate order (nether → radius
   cap → on-road snap → strict y120), same LAVA/COBWEB/HOLE sampling, same behavioral obstruction
@@ -111,15 +110,20 @@ Config persists as JSON at `<Fabric config dir>/ard.json`.
 
 ## Minecraft version
 
-Targets **1.21.10** right now — deliberately walking the version range one hop at a time
-(1.21.4 → 1.21.11 → 1.21.5 → 1.21.8 → **1.21.10**) rather than jumping straight to newest, so
-each hop's real API drift gets caught and fixed rather than skipped over. This is the last stop
-before returning to 1.21.11, which was already shipped. Independent of
+Targets **1.21.11** right now — hopped forward from 1.21.10 specifically to give the new
+Baritone auto-avoid something to talk to (Baritone's own newest release targets 1.21.11 and has
+no 1.21.10 build). This mod has walked the version range one hop at a time since it shipped
+(1.21.4 → 1.21.11 → 1.21.5 → 1.21.8 → 1.21.10 → **1.21.11**, again) rather than jumping straight
+to newest, so each hop's real API drift gets caught and fixed rather than skipped over — this
+particular hop needed no source changes at all (see the HUD-API table below: 1.21.8/1.21.10/
+1.21.11 are confirmed identical), just the `gradle.properties` version tuple. Independent of
 `plugin-aquarius`/`plugin-zenith`'s separate `mc=1.21.4` property — that's a different concern
 (which AquariusProxy/ZenithProxy protocol-compatibility release channel to compile against, not
 a real Minecraft client version). Not a hand-rolled multi-source-set project — a proper
 multi-version tool (e.g. [Stonecutter](https://stonecutter.kikugie.dev/)) is the intended path
-once there's a real need to support more than one version at once, not built yet.
+once there's a real need to support more than one version at once, not built yet; in the
+meantime, a release for every previously-shipped MC version is still published from a short-lived
+per-version branch carrying the same feature set — see the Downloads table above.
 
 **The HUD registration API is genuinely different at some hops** — confirmed by checking the
 actual javadoc for each target version rather than assuming, since guessing here has already
@@ -129,7 +133,7 @@ produced one real compile failure (below):
 |---|---|
 | 1.21.4 | `net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback` (the only option) |
 | 1.21.5 | `HudLayerRegistrationCallback` + `LayeredDrawerWrapper.attachLayerBefore(IdentifiedLayer.CHAT, id, layer)` — `HudRenderCallback` still exists but is already deprecated in favor of this |
-| 1.21.8, 1.21.10 (current), 1.21.11 | `HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT, id, element)` (introduced at 1.21.6, replacing `HudLayerRegistrationCallback`) — confirmed identical at all three versions |
+| 1.21.8, 1.21.10, 1.21.11 (current) | `HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT, id, element)` (introduced at 1.21.6, replacing `HudLayerRegistrationCallback`) — confirmed identical across all three versions |
 
 `(DrawContext, RenderTickCounter)` is the one render-method signature that's stayed constant
 across every version so far, which is why `HazardHudElement.render` itself never needed to
