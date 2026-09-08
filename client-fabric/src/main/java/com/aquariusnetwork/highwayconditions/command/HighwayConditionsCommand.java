@@ -160,7 +160,7 @@ public final class HighwayConditionsCommand {
 
     /** The ownership-proof handshake itself: a real {@code session/minecraft/join} call this
      *  client makes directly to Mojang (via the game's own session service, reached through
-     *  {@code MinecraftClient.getApiServices().sessionService()} -- the identical call vanilla
+     *  {@code MinecraftClient.getSessionService()} -- the identical call vanilla
      *  makes joining any online-mode server) using {@code verifyServerId} as the "server ID",
      *  then tells ARD to confirm it via {@code /link/verify-ownership}. Deliberately best-effort:
      *  a failure here (Mojang rejects the join, this is an offline/cracked account with no real
@@ -169,7 +169,7 @@ public final class HighwayConditionsCommand {
     private void proveOwnership(MinecraftClient mc, UUID uid, String verifyServerId,
                                 IngestClient client, String code, FabricClientCommandSource src) {
         try {
-            mc.getApiServices().sessionService()
+            mc.getSessionService()
                 .joinServer(uid, mc.getSession().getAccessToken(), verifyServerId);
             client.verifyOwnership(code);
         } catch (Exception ex) {
