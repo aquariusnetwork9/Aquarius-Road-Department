@@ -71,6 +71,14 @@ final class ObstructionWatcher {
         return null;
     }
 
+    /** True once a stall has been confirmed (any severity tier), false otherwise -- lets a
+     *  caller detect the falling edge (active -> inactive) between ticks (e.g. to fire a
+     *  "cleared" signal) without changing {@link #tick}'s existing edge-triggered return
+     *  contract. */
+    boolean isActive() {
+        return lastReportedSev > 0;
+    }
+
     /** Call when leaving the road/gate so stale peak-speed/stall state doesn't carry over. */
     void reset() {
         lastX = Double.NaN;

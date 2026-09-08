@@ -28,6 +28,7 @@ public class HighwayConditionsConfig {
 
     public final Reporter reporter = new Reporter();
     public final Hud hud = new Hud();
+    public final Baritone baritone = new Baritone();
 
     public static class Reporter {
         /** Master switch. Default OFF (opt-in). */
@@ -74,6 +75,24 @@ public class HighwayConditionsConfig {
          *  server's own read-rate budget is 120 req/min/IP shared across every read route, so
          *  even the floor is comfortably inside it. */
         public int pollSeconds = 5;
+
+        /** Master switch for the LOCAL hazard-right-here line (LocalHazardModule). Default ON,
+         *  and deliberately independent of {@link #enabled} -- this is a pure local detection
+         *  with zero network dependency, so it has zero privacy cost and zero server-load cost
+         *  either, the same reasoning that makes the crowdsourced line default-on. Detection and
+         *  the public API's events fire regardless of this flag either way -- this only controls
+         *  whether THIS player's own HUD renders it. */
+        public boolean localAlertEnabled = true;
+    }
+
+    public static class Baritone {
+        /** Opt-in (default OFF, like every other potentially-surprising automated-movement
+         *  toggle in this mod): when a local hazard is detected and Baritone happens to be loaded
+         *  (feature-detected via reflection -- this mod has no compile-time or runtime hard
+         *  dependency on Baritone, matching its own standing "no coupling to another client's
+         *  internal API" rule), drive a best-effort detour goal around it, then hand control back
+         *  once the hazard clears. See {@code module.BaritoneAvoidance}. */
+        public boolean autoAvoidEnabled = false;
     }
 
     private static final Logger LOGGER = LoggerFactory.getLogger("ard");

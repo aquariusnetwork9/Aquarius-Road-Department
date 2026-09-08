@@ -2,7 +2,9 @@ package com.aquariusnetwork.highwayconditions;
 
 import com.aquariusnetwork.highwayconditions.command.HighwayConditionsCommand;
 import com.aquariusnetwork.highwayconditions.hud.HazardHudElement;
+import com.aquariusnetwork.highwayconditions.module.BaritoneAvoidance;
 import com.aquariusnetwork.highwayconditions.module.HighwayReporterModule;
+import com.aquariusnetwork.highwayconditions.module.LocalHazardModule;
 import com.aquariusnetwork.highwayconditions.net.GeoCache;
 
 import net.fabricmc.api.ClientModInitializer;
@@ -41,8 +43,15 @@ public final class HighwayConditionsFabricClient implements ClientModInitializer
         ExecutorService executor = Executors.newFixedThreadPool(3, daemonThreadFactory());
 
         HighwayReporterModule reporter = new HighwayReporterModule(cfg, geoCache, executor);
-        HazardHudElement hud = new HazardHudElement(cfg, geoCache, executor, reporter::currentClient);
+        LocalHazardModule localHazard = new LocalHazardModule(geoCache);
+        HazardHudElement hud = new HazardHudElement(cfg, geoCache, executor, reporter::currentClient, localHazard);
         HighwayConditionsCommand command = new HighwayConditionsCommand(cfg, reporter, executor);
+
+        // Registers on LocalHazardEvents exactly like any third-party addon would -- see
+        // BaritoneAvoidance's own javadoc for why this ships in-tree instead of as a real
+        // dependency.
+        BaritoneAvoidance baritone = new BaritoneAvoidance(cfg);
+        baritone.register();
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             // Shared geometry fetch: neither the reporter nor the HUD owns this independently,
@@ -52,7 +61,9 @@ public final class HighwayConditionsFabricClient implements ClientModInitializer
                     g.roads == null ? 0 : g.roads.size(), g.map),
                 ex -> LOGGER.warn("Highway Conditions: geometry fetch failed: {}", ex.toString()));
             reporter.tick(client);
+            localHazard.tick(client);
             hud.tick(client);
+            baritone.tick();
         });
 
         // MC 1.21.8's HUD registration API: HudElementRegistry (introduced at 1.21.6, replacing

@@ -51,6 +51,8 @@ public final class HighwayConditionsCommand {
                 .then(argument("toggle", bool()).executes(this::setReporting)))
             .then(literal("presence")
                 .then(argument("toggle", bool()).executes(this::setPresence)))
+            .then(literal("baritone")
+                .then(argument("toggle", bool()).executes(this::setBaritoneAutoAvoid)))
             .then(literal("status").executes(this::status))
             .then(literal("link").executes(this::link))
             .then(literal("token")
@@ -80,12 +82,25 @@ public final class HighwayConditionsCommand {
         HighwayConditionsConfig.Reporter r = cfg.reporter;
         FabricClientCommandSource src = ctx.getSource();
         src.sendFeedback(Text.literal("Highway Conditions"));
-        src.sendFeedback(Text.literal("  Reporting: " + onOff(r.enabled)));
-        src.sendFeedback(Text.literal("  Presence:  " + onOff(r.reportPresence)));
-        src.sendFeedback(Text.literal("  Hazard HUD:" + onOff(cfg.hud.enabled)));
-        src.sendFeedback(Text.literal("  Server:    " + r.server));
-        src.sendFeedback(Text.literal("  Ingest:    " + r.ingestUrl));
-        src.sendFeedback(Text.literal("  Token set: " + (r.token != null && !r.token.isBlank())));
+        src.sendFeedback(Text.literal("  Reporting:  " + onOff(r.enabled)));
+        src.sendFeedback(Text.literal("  Presence:   " + onOff(r.reportPresence)));
+        src.sendFeedback(Text.literal("  Hazard HUD: " + onOff(cfg.hud.enabled)));
+        src.sendFeedback(Text.literal("  Local alert:" + onOff(cfg.hud.localAlertEnabled)));
+        src.sendFeedback(Text.literal("  Baritone:   " + onOff(cfg.baritone.autoAvoidEnabled)));
+        src.sendFeedback(Text.literal("  Server:     " + r.server));
+        src.sendFeedback(Text.literal("  Ingest:     " + r.ingestUrl));
+        src.sendFeedback(Text.literal("  Token set:  " + (r.token != null && !r.token.isBlank())));
+        return 1;
+    }
+
+    /** {@code /ard baritone on|off} -- toggles the opt-in Baritone auto-avoid
+     *  ({@code module.BaritoneAvoidance}), a no-op unless Baritone happens to be loaded too. */
+    private int setBaritoneAutoAvoid(CommandContext<FabricClientCommandSource> ctx) {
+        boolean on = BoolArgumentType.getBool(ctx, "toggle");
+        cfg.baritone.autoAvoidEnabled = on;
+        cfg.save();
+        ctx.getSource().sendFeedback(Text.literal("Baritone auto-avoid " + onOff(on)
+            + (on ? " (only takes effect if Baritone is also loaded)" : "")));
         return 1;
     }
 
