@@ -60,11 +60,11 @@ game version instead of hunting for "the" download:
 
 | MC version | Release |
 |---|---|
-| 1.21.4 | [client-fabric-v0.1.0+1.21.4](https://github.com/aquariusnetwork9/Aquarius-Road-Department/releases/tag/client-fabric-v0.1.0+1.21.4) |
-| 1.21.5 | [client-fabric-v0.1.0+1.21.5](https://github.com/aquariusnetwork9/Aquarius-Road-Department/releases/tag/client-fabric-v0.1.0+1.21.5) |
-| 1.21.8 | [client-fabric-v0.1.0+1.21.8](https://github.com/aquariusnetwork9/Aquarius-Road-Department/releases/tag/client-fabric-v0.1.0+1.21.8) |
-| 1.21.10 | [client-fabric-v0.1.0+1.21.10](https://github.com/aquariusnetwork9/Aquarius-Road-Department/releases/tag/client-fabric-v0.1.0+1.21.10) |
-| 1.21.11 | [client-fabric-v0.1.0+1.21.11](https://github.com/aquariusnetwork9/Aquarius-Road-Department/releases/tag/client-fabric-v0.1.0+1.21.11) |
+| 1.21.4 | [client-fabric-v0.2.0+1.21.4](https://github.com/aquariusnetwork9/Aquarius-Road-Department/releases/tag/client-fabric-v0.2.0+1.21.4) |
+| 1.21.5 | [client-fabric-v0.2.0+1.21.5](https://github.com/aquariusnetwork9/Aquarius-Road-Department/releases/tag/client-fabric-v0.2.0+1.21.5) |
+| 1.21.8 | [client-fabric-v0.2.0+1.21.8](https://github.com/aquariusnetwork9/Aquarius-Road-Department/releases/tag/client-fabric-v0.2.0+1.21.8) |
+| 1.21.10 | [client-fabric-v0.2.0+1.21.10](https://github.com/aquariusnetwork9/Aquarius-Road-Department/releases/tag/client-fabric-v0.2.0+1.21.10) |
+| 1.21.11 | [client-fabric-v0.2.0+1.21.11](https://github.com/aquariusnetwork9/Aquarius-Road-Department/releases/tag/client-fabric-v0.2.0+1.21.11) (current target) |
 
 `website/` isn't distributed as a downloadable artifact — it's deployed alongside the ingest
 service (see below), not something you install into a client.
@@ -143,14 +143,21 @@ for a server you run or contribute to, reach out to a maintainer — see PROTOCO
   `website/privacy.html` / `website/terms.html`.
 - **Phase 4** standalone Fabric client mod ([client-fabric/](client-fabric/)) — report-producer
   port of `plugin-aquarius` + the hazard-ahead HUD (the one thing nothing else in this project
-  provides — surfacing reported conditions in-game, no alt-tabbing to the map) shipped; walking
-  its own MC-version range one hop at a time (1.21.4 → 1.21.11 → 1.21.5 → 1.21.8 → **1.21.10**,
-  the last stop before the already-shipped 1.21.11) rather than jumping straight to newest,
-  independent of the proxy plugins' separate `mc=1.21.4` protocol-compatibility target. Builds
-  clean locally and via CI; not yet runtime-verified on a live server (the human-run equivalent
-  of the proxy plugins' goldfarm-first standing order). `client-fabric` is GitHub-Actions built
-  too, matching the "GitHub is the only allowed builder of a released jar" rule the other two
-  producers follow.
+  provides — surfacing reported conditions in-game, no alt-tabbing to the map) shipped; walked
+  its own MC-version range one hop at a time (1.21.4 → 1.21.11 → 1.21.5 → 1.21.8 → 1.21.10 →
+  **1.21.11**, again — the loop this mod's own roadmap always intended). Builds clean locally and
+  via CI; not yet runtime-verified on a live server (the human-run equivalent of the proxy
+  plugins' goldfarm-first standing order). `client-fabric` is GitHub-Actions built too, matching
+  the "GitHub is the only allowed builder of a released jar" rule the other two producers follow.
+  Independent of the proxy plugins' separate `mc=1.21.4` protocol-compatibility target.
+- **v0.2.0 (2026-09-07)**: `client-fabric` gained a live, zero-network local hazard alert, a
+  public Fabric-event API (`api.LocalHazardEvents`) other mods can hook into directly (a Meteor
+  addon, a Baritone add-on, anything else), and a first-party opt-in Baritone auto-avoid built
+  entirely on that same public API — see [client-fabric/README.md](client-fabric/README.md) and
+  the [wiki page](https://github.com/aquariusnetwork9/Aquarius-Road-Department/wiki/Local-Hazard-Alert-and-Addon-API)
+  for the full writeup. Shipped, rebuilt, and released for every previously-published MC version
+  (1.21.4/1.21.5/1.21.8/1.21.10/1.21.11), each verified to actually compile against that version's
+  real API surface rather than assumed identical.
 - **Phase 5** a reputation layer (weighting repeated contributions from the same verified
   identity) is live in the deployed service — mechanics aren't published here, see PROTOCOL.md
   §6.
