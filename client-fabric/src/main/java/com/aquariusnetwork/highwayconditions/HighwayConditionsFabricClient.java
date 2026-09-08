@@ -11,9 +11,7 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
-import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
-import net.minecraft.util.Identifier;
+import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,6 +32,10 @@ public final class HighwayConditionsFabricClient implements ClientModInitializer
 
     private static final Logger LOGGER = LoggerFactory.getLogger("ard");
 
+    // HudRenderCallback is marked @Deprecated in this Fabric API build, but its replacement
+    // (HudElementRegistry) wasn't introduced until MC 1.21.6 -- at the 1.21.4 target this branch
+    // builds against, HudRenderCallback is the only working HUD-render hook.
+    @SuppressWarnings("deprecation")
     @Override
     public void onInitializeClient() {
         HighwayConditionsConfig cfg = HighwayConditionsConfig.load();
@@ -66,12 +68,7 @@ public final class HighwayConditionsFabricClient implements ClientModInitializer
             baritone.tick();
         });
 
-        // MC 1.21.8's HUD registration API: HudElementRegistry (introduced at 1.21.6, replacing
-        // the 1.21.5-era HudLayerRegistrationCallback/LayeredDrawerWrapper this mod used before
-        // this hop). Attached just before vanilla chat so it inherits chat's own
-        // render-visibility condition (e.g. a hidden HUD).
-        HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT,
-            Identifier.of("ard", "hazard_ahead"), hud::render);
+        HudRenderCallback.EVENT.register(hud::render);
 
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
             command.register(dispatcher));

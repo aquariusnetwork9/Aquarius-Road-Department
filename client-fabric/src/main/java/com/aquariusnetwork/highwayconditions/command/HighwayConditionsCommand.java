@@ -15,7 +15,6 @@ import net.minecraft.text.ClickEvent;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 
-import java.net.URI;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 
@@ -144,7 +143,7 @@ public final class HighwayConditionsCommand {
                 mc.execute(() -> {
                     Text clickable = Text.literal("[click to finish linking]")
                         .styled(style -> style
-                            .withClickEvent(new ClickEvent.OpenUrl(URI.create(url)))
+                            .withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, url))
                             .withFormatting(Formatting.UNDERLINE, Formatting.AQUA));
                     src.sendFeedback(Text.literal("Your link code: " + code + "  ").append(clickable));
                     src.sendFeedback(Text.literal("After you finish on the website, copy your token "
@@ -160,7 +159,7 @@ public final class HighwayConditionsCommand {
 
     /** The ownership-proof handshake itself: a real {@code session/minecraft/join} call this
      *  client makes directly to Mojang (via the game's own session service, reached through
-     *  {@code MinecraftClient.getApiServices().sessionService()} -- the identical call vanilla
+     *  {@code MinecraftClient.getSessionService()} -- the identical call vanilla
      *  makes joining any online-mode server) using {@code verifyServerId} as the "server ID",
      *  then tells ARD to confirm it via {@code /link/verify-ownership}. Deliberately best-effort:
      *  a failure here (Mojang rejects the join, this is an offline/cracked account with no real
@@ -169,7 +168,7 @@ public final class HighwayConditionsCommand {
     private void proveOwnership(MinecraftClient mc, UUID uid, String verifyServerId,
                                 IngestClient client, String code, FabricClientCommandSource src) {
         try {
-            mc.getApiServices().sessionService()
+            mc.getSessionService()
                 .joinServer(uid, mc.getSession().getAccessToken(), verifyServerId);
             client.verifyOwnership(code);
         } catch (Exception ex) {
